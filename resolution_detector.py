@@ -25,7 +25,7 @@ class ResolutionDetectorFromFilename:
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("resolution",)
     FUNCTION = "detect_resolution"
-    CATEGORY = "WAN"
+    CATEGORY = "djb-utils"
     
     def detect_resolution(self, model_filename):
         print(f"ResolutionDetector: Checking filename: {model_filename}")
