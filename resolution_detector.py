@@ -28,14 +28,14 @@ class ResolutionDetectorFromFilename:
     CATEGORY = "djb-utils"
     
     def detect_resolution(self, model_filename):
-        print(f"ResolutionDetector: Checking filename: {model_filename}")
+        # print(f"ResolutionDetector: Checking filename: {model_filename}")
         
         if model_filename and model_filename != "No models found":
             # Search for 480p or 720p in the filename (case insensitive)
             match = re.search(r'(480p|720p)', model_filename, re.IGNORECASE)
             if match:
                 result = match.group(1).lower()  # Return lowercase for consistency
-                print(f"ResolutionDetector: Found resolution: {result}")
+                # print(f"ResolutionDetector: Found resolution: {result}")
                 return (result,)
         
         print("ResolutionDetector: No resolution found")
@@ -62,8 +62,8 @@ class WAN21ModelTracker:
         # Try to find resolution from recently loaded models
         model_id = str(id(model))
         
-        print(f"WAN21ModelTracker: Looking for model ID: {model_id}")
-        print(f"WAN21ModelTracker: Available tracked models: {list(self._loaded_models.keys())}")
+        # print(f"WAN21ModelTracker: Looking for model ID: {model_id}")
+        # print(f"WAN21ModelTracker: Available tracked models: {list(self._loaded_models.keys())}")
         
         # First try exact model ID match
         if model_id in self._loaded_models:
@@ -71,23 +71,23 @@ class WAN21ModelTracker:
             match = re.search(r'(480p|720p)', filename, re.IGNORECASE)
             if match:
                 result = match.group(1).lower()
-                print(f"WAN21ModelTracker: Found resolution from exact tracking: {result}")
+                # print(f"WAN21ModelTracker: Found resolution from exact tracking: {result}")
                 return (result,)
         
         # If no exact match, try the most recent loaded files
         recent_files = [v for k, v in self._loaded_models.items() if k.startswith('recent_')]
         if recent_files:
-            print(f"WAN21ModelTracker: Checking recent files: {recent_files}")
+            # print(f"WAN21ModelTracker: Checking recent files: {recent_files}")
             # Check the most recently loaded file
             latest_file = recent_files[-1]
             match = re.search(r'(480p|720p)', latest_file, re.IGNORECASE)
             if match:
                 result = match.group(1).lower()
-                print(f"WAN21ModelTracker: Found resolution from recent file {latest_file}: {result}")
+                # print(f"WAN21ModelTracker: Found resolution from recent file {latest_file}: {result}")
                 return (result,)
         
         # Fallback: try to extract from model attributes (more thorough search)
-        print(f"WAN21ModelTracker: Checking model attributes...")
+        # print(f"WAN21ModelTracker: Checking model attributes...")
         model_attrs = []
         try:
             for attr_name in dir(model):
@@ -99,21 +99,21 @@ class WAN21ModelTracker:
                             match = re.search(r'(480p|720p)', attr_value, re.IGNORECASE)
                             if match:
                                 result = match.group(1).lower()
-                                print(f"WAN21ModelTracker: Found resolution in attribute {attr_name}: {result}")
+                                # print(f"WAN21ModelTracker: Found resolution in attribute {attr_name}: {result}")
                                 return (result,)
                     except:
                         continue
             
             # Print all string attributes for debugging
             if model_attrs:
-                print(f"WAN21ModelTracker: Model string attributes: {model_attrs[:10]}")  # Limit to first 10
+                # print(f"WAN21ModelTracker: Model string attributes: {model_attrs[:10]}")  # Limit to first 10
             else:
-                print("WAN21ModelTracker: No string attributes found")
+                # print("WAN21ModelTracker: No string attributes found")
                 
         except Exception as e:
             print(f"WAN21ModelTracker: Error checking attributes: {e}")
         
-        print("WAN21ModelTracker: No resolution found")
+        # print("WAN21ModelTracker: No resolution found")
         return ("",)
 
 # Try to hook into ComfyUI's model loading - this is a bit experimental
@@ -127,7 +127,7 @@ try:
         original_load_torch_file = comfy.utils.load_torch_file
         
         def tracked_load_torch_file(path, *args, **kwargs):
-            print(f"WAN21ModelTracker: Loading file: {path}")
+            # print(f"WAN21ModelTracker: Loading file: {path}")
             result = original_load_torch_file(path, *args, **kwargs)
             
             # If this looks like a model loading, track it
@@ -135,7 +135,7 @@ try:
                 filename = os.path.basename(path)
                 # We'll use a simple counter approach since we can't easily get the model ID here
                 WAN21ModelTracker._loaded_models[f"recent_{len(WAN21ModelTracker._loaded_models)}"] = filename
-                print(f"WAN21ModelTracker: Tracked loading of {filename}")
+                # print(f"WAN21ModelTracker: Tracked loading of {filename}")
             
             return result
         
