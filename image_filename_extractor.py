@@ -1,13 +1,114 @@
 import os
+import folder_paths
 
-class ImageFilenameExtractor:
+class ReliableFilenameExtractor:
     """
-    A custom ComfyUI node that extracts the filename from an image input
-    and optionally strips "-swapped.png" from the filename.
+    A more reliable ComfyUI node that gets the filename by accessing ComfyUI's
+    internal image loading system directly, rather than trying to extract it
+    from image metadata.
     """
     
-    def __init__(self):
-        pass
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image_name": ("STRING", {
+                    "default": "",
+                    "tooltip": "The image filename (connect from LoadImage's 'image' parameter)"
+                }),
+            },
+            "optional": {
+                "image": ("IMAGE",),  # Optional for validation/passthrough
+            }
+        }
+    
+    RETURN_TYPES = ("STRING", "STRING", "STRING", "IMAGE")
+    RETURN_NAMES = ("full_filename", "name_only", "extension", "image_passthrough")
+    FUNCTION = "extract_filename"
+    CATEGORY = "djb-utils"
+    
+    def extract_filename(self, image_name, image=None):
+        """
+        Extract filename components from the image_name parameter.
+        This is more reliable than trying to get it from image metadata.
+        """
+        if not image_name or image_name.strip() == "":
+            return ("", "", "", image)
+        
+        # Clean the filename - remove any path components
+        clean_filename = os.path.basename(image_name.strip())
+        
+        # Handle your "-swapped.png" case
+        if clean_filename.endswith("-swapped.png"):
+            clean_filename = clean_filename[:-len("-swapped.png")]
+            # Add back appropriate extension if needed
+            if not any(clean_filename.endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.webp']):
+                clean_filename += ".png"
+        elif "-swapped.png" in clean_filename:
+            clean_filename = clean_filename.replace("-swapped.png", "")
+        
+        # Extract components
+        name_without_ext = os.path.splitext(clean_filename)[0]
+        extension = os.path.splitext(clean_filename)[1]
+        
+        return (clean_filename, name_without_ext, extension, image)
+
+
+class FilenameFromLoadImageDirect:
+    """
+    Alternative approach that tries to get the currently selected image
+    from ComfyUI's LoadImage system directly.
+    """
+    
+    @classmethod
+    def INPUT_TYPES(cls):
+        # Get available images from ComfyUI's input folder
+        input_dir = folder_paths.get_input_directory()
+        files = []
+        if os.path.exists(input_dir):
+            files = [f for f in os.listdir(input_dir) 
+                    if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.webp'))]
+        
+        return {
+            "required": {
+                "image_file": (files, {"default": files[0] if files else ""}),
+            }
+        }
+    
+    RETURN_TYPES = ("STRING", "STRING", "STRING")
+    RETURN_NAMES = ("full_filename", "name_only", "extension")
+    FUNCTION = "get_filename"
+    CATEGORY = "djb-utils"
+    
+    def get_filename(self, image_file):
+        """
+        Get filename from the selected image file.
+        """
+        if not image_file:
+            return ("", "", "")
+        
+        # Handle "-swapped.png" removal
+        clean_filename = image_file
+        if clean_filename.endswith("-swapped.png"):
+            clean_filename = clean_filename[:-len("-swapped.png")]
+            if not any(clean_filename.endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.webp']):
+                clean_filename += ".png"
+        elif "-swapped.png" in clean_filename:
+            clean_filename = clean_filename.replace("-swapped.png", "")
+        
+        # Extract components
+        name_without_ext = os.path.splitext(clean_filename)[0]
+        extension = os.path.splitext(clean_filename)[1]
+        
+        return (clean_filename, name_without_ext, extension)
+
+
+# Improved version of your existing approach with better debugging
+class ImprovedImageFilenameExtractor:
+    """
+    Improved version of your existing extractor with better debugging
+    and more metadata access methods.
+    """
     
     @classmethod
     def INPUT_TYPES(cls):
@@ -17,121 +118,97 @@ class ImageFilenameExtractor:
             }
         }
     
-    RETURN_TYPES = ("STRING",)
-    RETURN_NAMES = ("filename",)
+    RETURN_TYPES = ("STRING", "STRING")
+    RETURN_NAMES = ("filename", "debug_info")
     FUNCTION = "extract_filename"
     CATEGORY = "djb-utils"
     
     def extract_filename(self, image):
         """
-        Extract filename from image tensor and strip "-swapped.png" if present
+        Enhanced filename extraction with debugging information.
         """
         filename = ""
+        debug_info = []
         
-        # Try to get filename from image metadata
+        # Debug: Check what attributes the image tensor has
+        debug_info.append(f"Image type: {type(image)}")
+        debug_info.append(f"Image shape: {getattr(image, 'shape', 'No shape')}")
+        debug_info.append(f"Available attributes: {[attr for attr in dir(image) if not attr.startswith('_')]}")
+        
+        # Try multiple methods to extract filename
+        methods_tried = []
+        
+        # Method 1: Direct filename attribute
         if hasattr(image, 'filename') and image.filename:
-            filename = image.filename
-        elif hasattr(image, 'image') and hasattr(image.image, 'filename'):
-            filename = image.image.filename
-        elif len(image.shape) > 0 and hasattr(image, 'pil_image'):
-            # For PIL images
-            if hasattr(image.pil_image, 'filename'):
-                filename = image.pil_image.filename
+            filename = str(image.filename)
+            methods_tried.append("Direct filename attribute - SUCCESS")
+        else:
+            methods_tried.append("Direct filename attribute - FAILED")
         
-        # If we still don't have a filename, try to get it from the tensor metadata
+        # Method 2: Names attribute
         if not filename and hasattr(image, 'names') and image.names:
-            filename = image.names[0] if isinstance(image.names, list) else str(image.names)
-        
-        # Extract just the filename without path
-        if filename:
-            filename = os.path.basename(filename)
-            
-            # Strip "-swapped.png" if it exists in the filename
-            if filename.endswith("-swapped.png"):
-                filename = filename[:-len("-swapped.png")]
-                # Add back the original extension if there was one
-                # (in case the original was something like "image-swapped.png" from "image.jpg")
-                if not filename.endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.webp')):
-                    filename += ".png"  # Default to .png if no extension
-            elif "-swapped.png" in filename:
-                # Handle case where "-swapped.png" appears in middle of filename
-                filename = filename.replace("-swapped.png", "")
-        
-        return (filename,)
-
-# Alternative implementation that works with ComfyUI's image loading system
-class ImageFilenameExtractorV2:
-    """
-    Alternative implementation that tries to access filename through ComfyUI's image loading metadata
-    """
-    
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "image": ("IMAGE",),
-            }
-        }
-    
-    RETURN_TYPES = ("STRING",)
-    RETURN_NAMES = ("filename",)
-    FUNCTION = "extract_filename"
-    CATEGORY = "utils"
-    OUTPUT_NODE = False
-    
-    def extract_filename(self, image):
-        filename = "unknown"
-        
-        # ComfyUI typically stores metadata in the batch dimension or as attributes
-        try:
-            # Method 1: Check if filename is stored in image metadata
-            if hasattr(image, 'filename'):
-                filename = str(image.filename)
-            
-            # Method 2: Check for filename in tensor metadata (common in ComfyUI)
-            elif hasattr(image, 'names') and image.names is not None:
-                if isinstance(image.names, (list, tuple)) and len(image.names) > 0:
-                    filename = str(image.names[0])
+            try:
+                if isinstance(image.names, (list, tuple)):
+                    filename = str(image.names[0]) if image.names else ""
                 else:
                     filename = str(image.names)
-            
-            # Method 3: Try to get from tensor's underlying data structure
-            elif hasattr(image, 'meta') and 'filename' in image.meta:
-                filename = str(image.meta['filename'])
-                
-        except (AttributeError, IndexError, KeyError):
-            # If all methods fail, return a default
-            filename = "image_no_filename"
+                methods_tried.append("Names attribute - SUCCESS")
+            except:
+                methods_tried.append("Names attribute - FAILED")
+        else:
+            methods_tried.append("Names attribute - FAILED or not available")
         
-        # Clean up the filename
-        if filename and filename != "unknown":
-            # Extract basename (remove path)
+        # Method 3: Check for metadata dict
+        if not filename and hasattr(image, 'metadata') and isinstance(image.metadata, dict):
+            if 'filename' in image.metadata:
+                filename = str(image.metadata['filename'])
+                methods_tried.append("Metadata dict - SUCCESS")
+            else:
+                methods_tried.append("Metadata dict - No filename key")
+        else:
+            methods_tried.append("Metadata dict - FAILED or not available")
+        
+        # Method 4: Try to access tensor info
+        if not filename:
+            try:
+                # Some ComfyUI nodes store info in tensor.meta or similar
+                if hasattr(image, 'meta'):
+                    debug_info.append(f"Meta content: {image.meta}")
+                methods_tried.append("Tensor meta - checked")
+            except:
+                methods_tried.append("Tensor meta - FAILED")
+        
+        # Clean up filename if found
+        if filename and filename not in ["", "None", "none"]:
             filename = os.path.basename(filename)
             
-            # Remove "-swapped.png" if present
+            # Handle -swapped.png removal
             if filename.endswith("-swapped.png"):
-                # Remove -swapped.png and keep original extension or add .png
-                base_name = filename[:-len("-swapped.png")]
-                if '.' in base_name:
-                    filename = base_name
-                else:
-                    filename = base_name + ".png"
+                filename = filename[:-len("-swapped.png")]
+                if not any(filename.endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.webp']):
+                    filename += ".png"
             elif "-swapped.png" in filename:
-                # Remove -swapped.png from anywhere in the filename
                 filename = filename.replace("-swapped.png", "")
+        else:
+            filename = "no_filename_found"
         
-        return (filename,)
+        debug_info.extend(methods_tried)
+        debug_output = " | ".join(debug_info)
+        
+        return (filename, debug_output)
 
-# Node mappings for ComfyUI
+
+# Node mappings
 NODE_CLASS_MAPPINGS = {
-    "ImageFilenameExtractor": ImageFilenameExtractor,
-    "ImageFilenameExtractorV2": ImageFilenameExtractorV2,
+    "ReliableFilenameExtractor": ReliableFilenameExtractor,
+    "FilenameFromLoadImageDirect": FilenameFromLoadImageDirect,
+    "ImprovedImageFilenameExtractor": ImprovedImageFilenameExtractor,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "ImageFilenameExtractor": "Image Filename Extractor",
-    "ImageFilenameExtractorV2": "Image Filename Extractor V2",
+    "ReliableFilenameExtractor": "Reliable Filename Extractor",
+    "FilenameFromLoadImageDirect": "Filename from LoadImage Direct",
+    "ImprovedImageFilenameExtractor": "Improved Image Filename Extractor (Debug)",
 }
 
-# For ComfyUI to recognize this as a custom node package
 __all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']
