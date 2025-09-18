@@ -107,8 +107,10 @@ class WAN21ModelTracker:
             # Print all string attributes for debugging
             if model_attrs:
                 # print(f"WAN21ModelTracker: Model string attributes: {model_attrs[:10]}")  # Limit to first 10
+                pass
             else:
                 # print("WAN21ModelTracker: No string attributes found")
+                pass
                 
         except Exception as e:
             print(f"WAN21ModelTracker: Error checking attributes: {e}")
@@ -140,6 +142,7 @@ try:
             return result
         
         comfy.utils.load_torch_file = tracked_load_torch_file
+        
 except Exception as e:
     print(f"Could not patch ComfyUI loading functions: {e}")
 
